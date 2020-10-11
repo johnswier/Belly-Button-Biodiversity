@@ -1,80 +1,111 @@
-// Read in data using d3  
-d3.json("./data/samples.json").then((data) => {
-    // print dataset for reference 
-    console.log(data);
+// function to create metadata 
+function buildMetadata(selection) { 
+    // read in data
+    d3.json("./data/samples.json").then((data) => {
+        // print dataset for reference 
+        // console.log(data);
     
-    // collect metadata info
-    metaData = data.metadata;
-    
-    // collect ID's
-    idList = data.names;
-    
-    // collect samples
-    samples = data.samples;
-    
-    // Loop through ID's and add each one to dropdown menu
-    for (let i = 0; i < idList.length; i++) {
-        dropdownMenu = d3.select("#selDataset");
-        dropdownMenu.append("option").text(idList[i]);
-    };
-});
-// create GLOBAL variable to hold demographic info card HTML element
-demoCard = d3.select("#sample-metadata");
+        // collect metadata info
+        var metaData = data.metadata;
 
-// create GLOBAL variable to hold dropdown menu HTML element 
-dropdownMenu = d3.select("#selDataset");
-
-//create variable to hold bar chart HTML element
-barChart = d3.select("#bar");
-
-// create function to handle the user selected ID and display appropriate plots
-function updatePlots() {
-    // clear demographics data and plots each time new ID is selected
-    demoCard.html("");
-    barChart.html("");
-    
-    // create select variable on each ID's key-value pairs within dropdown menu
-    key = d3.select(this).property('id');
-    value = d3.select(this).property('value');
-    
-    // filter demographic info by whichever ID is selected
-    filteredDemo = metaData.filter(obj => obj.id== value);
-    
-    // filter barchart 
-    filteredBar = samples.filter(x => x.id == value);
-    console.log(filteredBar[0].otu_ids.slice(0,10));
-    
-    // extract filtered demographic info and update HTML element
-    Object.entries(filteredDemo[0]).forEach(([k,v]) => {
+        // filter demographic info by whichever ID is selected
+        var filteredDemo = metaData.filter(obj => obj.id == selection);
+        
+        // create var to hold demographic info card HTML element
+        var demoCard = d3.select("#sample-metadata");
+        
+        // clear demographics data each time new ID is selected
+        demoCard.html("");
+        
+        // extract filtered demographic info and update HTML element
+        Object.entries(filteredDemo[0]).forEach(([k,v]) => {
         demoCard.append("h6").text(`${k}: ${v}`);
         });
-    
-    // extract filtered barchart values and update plot
-    var barData = [{
-        x: [filteredBar[0].sample_values.slice(0,10)],
-        y: [filteredBar[0].otu_ids.slice(0, 10)],
-        text: filteredBar[0].otu_labels.slice(0,10),
-        type: "bar"
-    }];
-    
-    Plotly.restyle("bar", barData);
+    });
 };
 
-// event listener for dropdown menu 
-dropdownMenu.on("change", updatePlots);
+// function to create plots
+function buildPlots(selection) {
+    d3.json("./data/samples.json").then((data) => {
+    
+        // collect samples
+        var samples = data.samples;
 
-// display default bar chart
+        // filter out the sample that matches user selection
+        var filteredSample = samples.filter(obj => obj.id == selection);
+
+        // index into the sample 
+        var sample = filteredSample[0];
+    
+        // extract data necessary for plots
+        var otuIDs = sample.otu_ids;
+        var otuLabels = sample.otu_labels;
+        var sampleValues = sample.sample_values
+
+        // create bar chart using first 10 data points
+        var barData = [{
+            x: sampleValues.slice(0,10).reverse(),
+            y: otuIDs.slice(0,10).map(otuIDs => `OTU ${otuIDs}`).reverse(),
+            text: otuLabels.slice(0,10).reverse(),
+            type: "bar",
+            orientation: "h"
+        }];
+        var barLayout = {
+            title: "OTU IDs",
+        };
+        Plotly.newPlot("bar", barData, barLayout);
+
+        // create a bubble chart using the first 10 data points
+        var bubbleData = [{
+            x: otuIDs,
+            y: sampleValues,
+            text: otuLabels,
+            mode: "markers",
+            marker: {
+                size: sampleValues,
+                color: otuIDs,
+                colorscale: "Earth"
+            }
+        }];
+        var bubbleLayout = {
+            hovermode: "closest",
+            xaxis: {title: "OTU ID"},
+            title: "Cultures for each OTU Sample",
+            margin: {t:0},
+            margin: {t:30}
+        };
+        Plotly.newPlot("bubble", bubbleData, bubbleLayout);    
+    });
+};
+            
+
+// build dropdown menu selection list and initial plots
 function init() {
-    var data = [{
-        x: samples[0].sample_values.slice(0, 10),
-        y: samples[0].otu_ids.slice(0, 10),
-        text: samples[0].otu_labels.slice(0,10),
-        type: "bar"
-    }];
-Plotly.newPlot("bar", data);
+    // var to hold dropdown menu HTML element
+    var dropdownMenu = d3.select("#selDataset");
+    
+    d3.json("./data/samples.json").then((data) => {
+        
+        // collect ID's
+        var idList = data.names;
+    
+        // Loop through ID's and add each one to dropdown menu
+        for (let i = 0; i < idList.length; i++) {
+            dropdownMenu.append("option")
+                        .text(idList[i])
+                        .property("value", idList[i]);
+        };
+
+        // initial plots
+        buildMetadata(idlist[0]);
+        buildPlots(idlist[0]);
+    });
 };
 
-// event listener for when page loads -- run the init function to display default plot
-window.addEventListener('load', (event) => {
-    init();
-});
+// function to run when new ID is selected
+function optionChanged(selection) {
+    buildMetadata(selection);
+    buildPlots(selection);
+};
+
+init();
